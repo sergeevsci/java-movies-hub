@@ -24,7 +24,7 @@ public class MoviesApiTest {
 
     @BeforeAll
     static void beforeAll() {
-        server = new MoviesServer(new MoviesStore(), 8080);
+        server = new MoviesServer(8080);
         server.start();
 
         // Создаем HTTP-клиент с таймаутом
