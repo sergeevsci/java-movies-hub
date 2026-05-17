@@ -27,24 +27,9 @@ abstract class BaseHttpHandler implements HttpHandler {
     }
 
     protected void sendNoContent(HttpExchange ex) throws java.io.IOException {
-        // Код 204 означает "No Content". Вторым аргументом передаем -1
+        // Код 204 "No Content". Вторым аргументом передаем -1
         ex.getResponseHeaders().set("Content-Type", CT_JSON);
         ex.sendResponseHeaders(204, -1);
         ex.close();
-    }
-}
-
-class MoviesHandler extends BaseHttpHandler {
-
-    @Override
-    public void handle(HttpExchange ex) throws IOException {
-        String method = ex.getRequestMethod();
-
-        if (method.equalsIgnoreCase("GET")) {
-            sendJson(ex, 200, "[]");
-        } else {
-            ex.sendResponseHeaders(405, 0);
-            ex.close();
-        }
     }
 }

@@ -1,24 +1,20 @@
 package ru.practicum.moviehub.http;
 
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.Test;
+import ru.practicum.moviehub.store.MoviesStore;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 
 public class MoviesServer {
     private final HttpServer server;
+    private final MoviesStore moviesStore;
 
-    public MoviesServer() {
+    public MoviesServer(MoviesStore moviesStore, int port) {
+        this.moviesStore = moviesStore;
         try {
             // создайте сервер
-            server = HttpServer.create(new InetSocketAddress(8080), 0);
+            server = HttpServer.create(new InetSocketAddress(port), 0);
         } catch (IOException e) {
             throw new RuntimeException("Не удалось создать HTTP-сервер", e);
         }

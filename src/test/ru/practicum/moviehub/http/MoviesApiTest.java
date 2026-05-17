@@ -2,12 +2,9 @@ package ru.practicum.moviehub.http;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import ru.practicum.moviehub.store.MoviesStore;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,18 +17,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MoviesApiTest {
-    // 1. Добавляем константу с базовой частью URL (без слэша на конце)
+    // Добавляем константу с базовой частью URL
     private static final String BASE = "http://localhost:8080";
     private static MoviesServer server;
     private static HttpClient client;
 
     @BeforeAll
     static void beforeAll() {
-        // 2. Инициализируем и запускаем сервер
-        server = new MoviesServer();
+        server = new MoviesServer(new MoviesStore(), 8080);
         server.start();
 
-        // 3. Создаем HTTP-клиент с таймаутом
+        // Создаем HTTP-клиент с таймаутом
         client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
@@ -39,13 +35,12 @@ public class MoviesApiTest {
 
     @AfterAll
     static void afterAll() {
-        // 4. Одобряем остановку сервера после выполнения ВСЕХ тестов
         server.stop();
     }
 
     @Test
     void getMovies_whenEmpty_returnsEmptyArray() throws Exception {
-        // 5. Собираем URI из константы BASE и нужного эндпоинта
+        // Собираем URI из константы BASE и нужного эндпоинта
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
                 .GET()
