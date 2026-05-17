@@ -1,6 +1,7 @@
 package ru.practicum.moviehub.model;
 
 public class Movie {
+    private Integer id;
     private final String title;
     private final int year;
 
@@ -15,5 +16,13 @@ public class Movie {
 
     public int getYear() {
         return year;
+    }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
     }
 }
