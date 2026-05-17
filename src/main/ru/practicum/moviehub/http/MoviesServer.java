@@ -5,7 +5,6 @@ import ru.practicum.moviehub.store.MoviesStore;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.Map;
 
 public class MoviesServer {
     private final HttpServer server;
