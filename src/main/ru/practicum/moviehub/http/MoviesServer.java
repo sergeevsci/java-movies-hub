@@ -5,6 +5,7 @@ import ru.practicum.moviehub.store.MoviesStore;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Map;
 
 public class MoviesServer {
     private final HttpServer server;
@@ -30,5 +31,9 @@ public class MoviesServer {
         // остановите сервер
         server.stop(0);
         System.out.println("Сервер остановлен");
+    }
+
+    public MoviesStore getMoviesStore() {
+        return moviesStore;
     }
 }

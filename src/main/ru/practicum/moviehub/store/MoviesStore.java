@@ -29,4 +29,9 @@ public class MoviesStore {
     public Movie delete(int id) {
         return movieStore.remove(id);
     }
+
+    public void clear() {
+        movieStore.clear();
+        currentId = 1; // Сбрасываем счетчик ID, чтобы каждый тест начинался с чистого листа
+    }
 }

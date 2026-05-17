@@ -3,6 +3,8 @@ package ru.practicum.moviehub.http;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import ru.practicum.moviehub.api.ErrorResponse;
 import ru.practicum.moviehub.model.Movie;
 
 import java.net.URI;
@@ -32,6 +34,11 @@ public class MoviesApiTest {
         client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
+    }
+
+    @BeforeEach
+    void beforeEach() {
+        server.getMoviesStore().clear();
     }
 
     @AfterAll
@@ -85,8 +92,8 @@ public class MoviesApiTest {
 
         // проверяем поля через assertEquals
         java.util.Objects.requireNonNull(responseMovie, "Сервер вернул пустое тело");
-        assertEquals("Inception", responseMovie.getTitle(), "Название фильма не совпадает");
-        assertEquals(2010, responseMovie.getYear(), "Год фильма не совпадает");
+        assertEquals("Невероятная жизнь Уолтера Митти", responseMovie.getTitle(), "Название фильма не совпадает");
+        assertEquals(2013, responseMovie.getYear(), "Год фильма не совпадает");
         assertTrue(responseMovie.getId() > 0, "Сервер должен был присвоить фильму валидный ID > 0");
     }
 
@@ -184,5 +191,59 @@ public class MoviesApiTest {
 
         // Теперь сервер обязан ответить 404, так как фильма уже нет
         assertEquals(404, repeatedDeleteResponse.statusCode(), "Повторное удаление должно вернуть 404 Not Found");
+    }
+
+    @Test
+    void getMovies_withYearFilter_returnsOnlyMatchingMovies() throws Exception {
+        Movie m1 = new Movie("Шрекс", 2001);
+        client.send(HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/movies"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(m1), StandardCharsets.UTF_8))
+                .build(), HttpResponse.BodyHandlers.discarding());
+
+        Movie m2 = new Movie("Че там еще было", 2010);
+        client.send(HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/movies"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(m2), StandardCharsets.UTF_8))
+                .build(), HttpResponse.BodyHandlers.discarding());
+
+        // Делаем GET-запрос с фильтром
+        HttpRequest getRequest = HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/movies?year=2001"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response =
+                client.send(getRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertEquals(200, response.statusCode(), "Запрос с корректным фильтром должен вернуть 200");
+
+        Movie[] filteredMovies = gson.fromJson(response.body(), Movie[].class);
+
+        assertEquals(1, filteredMovies.length, "Должен вернуться только один фильм");
+        assertEquals("Шрекс", filteredMovies[0].getTitle(), "Должен вернуться фильм 'Шрекс'");
+        assertEquals(2001, filteredMovies[0].getYear(), "Год должен быть 2001");
+    }
+
+    @Test
+    void getMovies_withBadYearFilter_returns400BadRequest() throws Exception {
+        // Отправляем запрос с заведомо некорректным годом
+        HttpRequest getRequest = HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/movies?year=invalid_year"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response =
+                client.send(getRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertEquals(400, response.statusCode(), "Некорректный год должен возвращать 400");
+
+        ErrorResponse errorObj = gson.fromJson(response.body(), ErrorResponse.class);
+
+        java.util.Objects.requireNonNull(errorObj, "Тело ответа не должно быть пустым");
+        assertEquals("Некорректный параметр запроса — 'year'", errorObj.getError(),
+                "Сообщение об ошибке не совпадает с ТЗ");
     }
 }
