@@ -4,8 +4,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import ru.practicum.moviehub.store.MoviesStore;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -19,12 +17,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MoviesApiTest {
     // Добавляем константу с базовой частью URL
     private static final String BASE = "http://localhost:8080";
+    private static final int PORT = 8080;
     private static MoviesServer server;
     private static HttpClient client;
 
     @BeforeAll
     static void beforeAll() {
-        server = new MoviesServer(8080);
+        server = new MoviesServer(PORT);
         server.start();
 
         // Создаем HTTP-клиент с таймаутом
