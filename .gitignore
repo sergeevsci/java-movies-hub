@@ -4,6 +4,8 @@ out/
 !**/src/test/**/out/
 
 .idea/
+.out/
+java-movies-hub.iml
 
 ### Eclipse ###
 .apt_generated

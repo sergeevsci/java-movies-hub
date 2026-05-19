@@ -7,13 +7,23 @@ import ru.practicum.moviehub.store.MoviesStore;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-class MoviesHandler extends BaseHttpHandler {
+// Классная идея разделить все на методы и вызывать нужный по требованию, чето сразу я не додумался разбить код.
+// И глянул, дальше Spring Boot все будет делать именно так, только автоматически, прикольная тема. как раз дальше будет
+// Сразу ясно что и для чего делается
 
+public class MoviesHandler extends BaseHttpHandler {
+
+    // Префикс теперь в константе
+    private static final String MOVIES_PREFIX = "/movies/";
     private final MoviesStore moviesStore;
 
     public MoviesHandler(MoviesStore moviesStore) {
@@ -24,127 +34,172 @@ class MoviesHandler extends BaseHttpHandler {
     public void handle(HttpExchange ex) throws IOException {
         String method = ex.getRequestMethod().toUpperCase();
 
+        // switch занимается делегированием в нужный метод
         switch (method) {
-            case "GET" -> {
-                String path = ex.getRequestURI().getPath();
-                String query = ex.getRequestURI().getQuery(); // Получаем строку параметров
-
-                // Запрос на базовый эндпоинт /movies
-                if (path.equals("/movies") || path.equals("/movies/")) {
-
-                    // Если клиент передал какие-то параметры в URL
-                    if (query != null) {
-                        // Проверяем, что параметр начинается строго с "year="
-                        if (query.startsWith("year=")) {
-                            try {
-                                String yearString = query.substring(5);
-                                int targetYear = Integer.parseInt(yearString);
-
-                                int maxYear = java.time.LocalDate.now().getYear() + 1;
-                                if (targetYear < 1888 || targetYear > maxYear) {
-                                    sendError(ex, 400, "Некорректный параметр запроса — 'year'");
-                                    return;
-                                }
-
-                                // Фильтруем фильмы из хранилища стримом
-                                List<Movie> filteredMovies = moviesStore.getAll().stream()
-                                        .filter(movie -> movie.getYear() == targetYear)
-                                        .toList();
-
-                                sendJson(ex, 200, gson.toJson(filteredMovies));
-                                return;
-
-                            } catch (NumberFormatException e) {
-                                sendError(ex, 400, "Некорректный параметр запроса — 'year'");
-                                return;
-                            }
-                        } else {
-                            sendError(ex, 400, "Некорректный параметр запроса — 'year'");
-                            return;
-                        }
-                    }
-
-                    // Если параметров нет — отдаем всё как обычно
-                    sendJson(ex, 200, gson.toJson(moviesStore.getAll()));
-                    return;
-                }
-
-                // Запрос на поиск конкретного фильма по ID (/movies/{id})
-                if (path.startsWith("/movies/")) {
-                    try {
-                        String idString = path.substring(8);
-                        int id = Integer.parseInt(idString);
-                        Movie movie = moviesStore.getById(id);
-
-                        if (movie != null) {
-                            sendJson(ex, 200, gson.toJson(movie));
-                        } else {
-                            sendError(ex, 404, "Фильм с id " + id + " не найден");
-                        }
-                    } catch (NumberFormatException e) {
-                        sendError(ex, 400, "Некорректный формат ID ресурса");
-                    }
-                }
-            }
-            case "POST" -> {
-                // Проверка Content-Type
-                String contentType = ex.getRequestHeaders().getFirst("Content-Type");
-                if (contentType == null || !contentType.toLowerCase().contains("application/json")) {
-                    sendError(ex, 415, "Unsupported Media Type");
-                    return;
-                }
-
-                try (InputStream is = ex.getRequestBody()) {
-                    String body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                    Movie movie = gson.fromJson(body, Movie.class);
-
-                    // Вызов метода валидации
-                    List<String> details = validateMovie(movie);
-
-                    if (!details.isEmpty()) {
-                        // Если есть ошибки
-                        ErrorResponse errorObj = new ErrorResponse("Ошибка валидации", details);
-                        sendJson(ex, 422, gson.toJson(errorObj));
-                        return;
-                    }
-
-                    // Если всё ок — сохраняем
-                    int id = moviesStore.add(movie);
-                    movie.setId(id);
-
-                    sendJson(ex, 201, gson.toJson(movie));
-
-                } catch (Exception e) {
-                    sendError(ex, 400, "Некорректный формат JSON");
-                }
-            }
-            case "DELETE" -> {
-                String path = ex.getRequestURI().getPath();
-
-                // Проверяем, что путь ведет к конкретному фильму: /movies/{id}
-                if (path.startsWith("/movies/")) {
-                    try {
-                        String idString = path.substring(8);
-                        int id = Integer.parseInt(idString);
-
-                        Movie deletedMovie = moviesStore.delete(id);
-
-                        if (deletedMovie != null) {
-                            // Если фильм был и успешно удален — возвращаем 204 No Content
-                            sendNoContent(ex);
-                        } else {
-                            // Если фильма с таким ID не существовало — 404 Not Found
-                            sendError(ex, 404, "Фильм с id " + id + " не найден");
-                        }
-                    } catch (NumberFormatException e) {
-                        sendError(ex, 400, "Некорректный формат ID ресурса");
-                    }
-                } else {
-                    sendError(ex, 400, "Не указан ID фильма для удаления");
-                }
-            }
+            case "GET" -> handleGet(ex);
+            case "POST" -> handlePost(ex);
+            case "DELETE" -> handleDelete(ex);
             default -> sendError(ex, 405, "Метод " + method + " не поддерживается");
         }
+    }
+
+    // =========================================================================
+    // ЛОГИКА ОБРАБОТКИ GET-ЗАПРОСОВ
+    // =========================================================================
+    private void handleGet(HttpExchange ex) throws IOException {
+        String path = ex.getRequestURI().getPath();
+        String query = ex.getRequestURI().getQuery();
+
+        // Разделяем хендлер на базовый /movies (список и фильтрация)
+        if (path.equals("/movies") || path.equals("/movies/")) {
+            if (query != null) {
+                processFilteredGet(ex, query);
+            } else {
+                sendJson(ex, 200, gson.toJson(moviesStore.getAll()));
+            }
+            return;
+        }
+
+        // Разделяем хендлер на ресурсный /movies/{id}
+        if (path.startsWith(MOVIES_PREFIX)) {
+            processGetById(ex, path);
+            return;
+        }
+
+        // Если путь не подошел ни под один паттерн
+        sendError(ex, 404, "Ресурс не найден");
+    }
+
+    private void processFilteredGet(HttpExchange ex, String query) throws IOException {
+        Map<String, String> params = parseQueryParams(query);
+
+        if (params.containsKey("year")) {
+            try {
+                int targetYear = Integer.parseInt(params.get("year"));
+                int maxYear = LocalDate.now().getYear() + 1;
+
+                if (targetYear < 1888 || targetYear > maxYear) {
+                    sendError(ex, 400, "Некорректный параметр запроса — 'year'");
+                    return;
+                }
+
+                List<Movie> filteredMovies = moviesStore.getAll().stream()
+                        .filter(movie -> movie.getYear() == targetYear)
+                        .toList();
+
+                sendJson(ex, 200, gson.toJson(filteredMovies));
+            } catch (NumberFormatException e) {
+                sendError(ex, 400, "Некорректный параметр запроса — 'year'");
+            }
+        } else {
+            sendError(ex, 400, "Некорректный параметр запроса — 'year'");
+        }
+    }
+
+    private void processGetById(HttpExchange ex, String path) throws IOException {
+        try {
+            int id = extractIdFromPath(path);
+            Movie movie = moviesStore.getById(id);
+
+            if (movie != null) {
+                sendJson(ex, 200, gson.toJson(movie));
+            } else {
+                sendError(ex, 404, "Фильм с id " + id + " не найден");
+            }
+        } catch (NumberFormatException e) {
+            sendError(ex, 400, "Некорректный формат ID ресурса");
+        }
+    }
+
+    // =========================================================================
+    // ЛОГИКА ОБРАБОТКИ POST-ЗАПРОСОВ
+    // =========================================================================
+    private void handlePost(HttpExchange ex) throws IOException {
+        String contentType = ex.getRequestHeaders().getFirst("Content-Type");
+        if (contentType == null || !contentType.toLowerCase().contains("application/json")) {
+            sendError(ex, 415, "Unsupported Media Type");
+            return;
+        }
+
+        // Оптимизация: читаем и парсим в JSON напрямую из InputStream через Reader
+        try (InputStream is = ex.getRequestBody();
+             InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+
+            Movie movie = gson.fromJson(reader, Movie.class);
+            List<String> details = validateMovie(movie);
+
+            if (!details.isEmpty()) {
+                ErrorResponse errorObj = new ErrorResponse("Ошибка валидации", details);
+                sendJson(ex, 422, gson.toJson(errorObj));
+                return;
+            }
+
+            int id = moviesStore.add(movie);
+            movie.setId(id);
+
+            sendJson(ex, 201, gson.toJson(movie));
+        } catch (Exception e) {
+            sendError(ex, 400, "Некорректный формат JSON");
+        }
+    }
+
+    // =========================================================================
+    // ЛОГИКА ОБРАБОТКИ DELETE-ЗАПРОСОВ
+    // =========================================================================
+    private void handleDelete(HttpExchange ex) throws IOException {
+        String path = ex.getRequestURI().getPath();
+
+        if (path.startsWith(MOVIES_PREFIX)) {
+            try {
+                int id = extractIdFromPath(path);
+                Movie deletedMovie = moviesStore.delete(id);
+
+                if (deletedMovie != null) {
+                    sendNoContent(ex);
+                } else {
+                    sendError(ex, 404, "Фильм с id " + id + " не найден");
+                }
+            } catch (NumberFormatException e) {
+                sendError(ex, 400, "Некорректный формат ID ресурса");
+            }
+        } else {
+            sendError(ex, 400, "Не указан ID фильма для удаления");
+        }
+    }
+
+    // =========================================================================
+    // ВСПОМОГАТЕЛЬНЫЕ УТИЛИТАРНЫЕ МЕТОДЫ
+    // =========================================================================
+
+    // Безопасное извлечение ID с обработкой завершающего слэша
+    private int extractIdFromPath(String path) throws NumberFormatException {
+        String idString = path.substring(MOVIES_PREFIX.length());
+        if (idString.endsWith("/")) {
+            idString = idString.substring(0, idString.length() - 1);
+        }
+        return Integer.parseInt(idString);
+    }
+
+    // Парсинг параметров по имени
+    private Map<String, String> parseQueryParams(String query) {
+        Map<String, String> result = new HashMap<>();
+        if (query == null || query.isBlank()) {
+            return result;
+        }
+
+        String[] pairs = query.split("&");
+        for (String pair : pairs) {
+            String[] idx = pair.split("=", 2);
+            if (idx.length == 2) {
+                String key = URLDecoder.decode(idx[0], StandardCharsets.UTF_8);
+                String value = URLDecoder.decode(idx[1], StandardCharsets.UTF_8);
+                result.put(key, value);
+            } else if (idx.length == 1 && !idx[0].isBlank()) {
+                String key = URLDecoder.decode(idx[0], StandardCharsets.UTF_8);
+                result.put(key, "");
+            }
+        }
+        return result;
     }
 
     private List<String> validateMovie(Movie movie) {
@@ -156,7 +211,6 @@ class MoviesHandler extends BaseHttpHandler {
             errors.add("длина названия не должна превышать 100 символов");
         }
 
-        // вычисляем максимальный разрешенный год (текущий + 1)
         int maxYear = LocalDate.now().getYear() + 1;
         if (movie.getYear() < 1888 || movie.getYear() > maxYear) {
             errors.add("год должен быть между 1888 и " + maxYear);

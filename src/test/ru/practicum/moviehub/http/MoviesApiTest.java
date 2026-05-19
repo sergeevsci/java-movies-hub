@@ -2,8 +2,8 @@ package ru.practicum.moviehub.http;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import ru.practicum.moviehub.api.ErrorResponse;
 import ru.practicum.moviehub.model.Movie;
 
@@ -184,6 +184,21 @@ public class MoviesApiTest {
     }
 
     @Test
+    void getMovieById_whenExistsAndPathEndsWithSlash_returnsMovieAndStatus200() throws Exception {
+        HttpResponse<String> postResponse = sendCreateMovie("Матрица", 1999);
+        Movie createdMovie = gson.fromJson(postResponse.body(), Movie.class);
+
+        HttpResponse<String> getResponse = sendGet("/movies/" + createdMovie.getId() + "/");
+
+        assertEquals(200, getResponse.statusCode());
+        assertJsonContentType(getResponse);
+
+        Movie fetchedMovie = gson.fromJson(getResponse.body(), Movie.class);
+        assertNotNull(fetchedMovie);
+        assertEquals(createdMovie.getId(), fetchedMovie.getId());
+    }
+
+    @Test
     void getMovieById_whenNotExists_returns404NotFound() throws Exception {
         HttpResponse<String> getResponse = sendGet("/movies/9999");
 
@@ -239,6 +254,18 @@ public class MoviesApiTest {
     }
 
     @Test
+    void deleteMovie_whenIdMissing_returns400() throws Exception {
+        HttpResponse<String> response = sendDelete("/movies");
+
+        assertEquals(400, response.statusCode());
+        assertJsonContentType(response);
+
+        ErrorResponse error = gson.fromJson(response.body(), ErrorResponse.class);
+        assertNotNull(error);
+        assertEquals("Не указан ID фильма для удаления", error.getError());
+    }
+
+    @Test
     void getMovies_withYearFilter_returnsOnlyMatchingMovies() throws Exception {
         sendCreateMovie("Шрек", 2001);
         sendCreateMovie("Че там еще было", 2010);
@@ -280,6 +307,19 @@ public class MoviesApiTest {
         assertNotNull(errorObj, "Тело ответа не должно быть пустым");
         assertEquals("Некорректный параметр запроса — 'year'", errorObj.getError(),
                 "Сообщение об ошибке не совпадает с ТЗ");
+    }
+
+    @Test
+    void getMovies_withOutOfRangeYearFilter_returns400BadRequest() throws Exception {
+        int invalidYear = LocalDate.now().getYear() + 2;
+        HttpResponse<String> response = sendGet("/movies?year=" + invalidYear);
+
+        assertEquals(400, response.statusCode());
+        assertJsonContentType(response);
+
+        ErrorResponse errorObj = gson.fromJson(response.body(), ErrorResponse.class);
+        assertNotNull(errorObj);
+        assertEquals("Некорректный параметр запроса — 'year'", errorObj.getError());
     }
 
     @Test

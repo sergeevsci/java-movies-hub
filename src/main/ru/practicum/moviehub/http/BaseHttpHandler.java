@@ -30,7 +30,7 @@ abstract class BaseHttpHandler implements HttpHandler {
         ex.close();
     }
 
-    protected void sendNoContent(HttpExchange ex) throws java.io.IOException {
+    protected void sendNoContent(HttpExchange ex) throws IOException {
         // Код 204 "No Content". Вторым аргументом передаем -1
         ex.getResponseHeaders().set("Content-Type", CT_JSON);
         ex.sendResponseHeaders(204, -1);

@@ -10,7 +10,6 @@ public class MovieHubApp {
         final MoviesServer server = new MoviesServer(PORT);
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
         server.start();
-
     }
 
 }
