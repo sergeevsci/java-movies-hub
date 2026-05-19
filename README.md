@@ -1,2 +1,2 @@
 # java-movies-hub
-Repository for homework project.
+Привет, Сергей! Ура, финалка 9ого спринта. Начнем полировать!
